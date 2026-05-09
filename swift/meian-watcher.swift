@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import AppKit
 
 let usage = """
 meian-watcher: macOS Light/Dark mode watcher for Neovim.
@@ -205,4 +206,9 @@ Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
     checkIdle()
 }
 
-RunLoop.main.run()
+// Become an accessory NSApplication so distnoted treats us as a registered
+// receiver. Without this, AppleInterfaceThemeChangedNotification is delivered
+// only when posted via AppleScript / System Events; System Settings or the
+// automatic appearance switch does not reach a plain CLI tool.
+NSApplication.shared.setActivationPolicy(.accessory)
+NSApplication.shared.run()
