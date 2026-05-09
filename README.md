@@ -8,7 +8,8 @@
 
 ## Overview
 
-`meian.nvim` ships with a small Swift watcher that subscribes to the system's `AppleInterfaceThemeChangedNotification`.
+`meian.nvim` ships with a small Swift watcher that observes the system appearance.
+It watches the global preferences file for appearance updates.
 When the appearance changes, the watcher pushes the new mode (`light` or `dark`) into every running Neovim by calling `nvim --server <socket> --remote-send`,
 which invokes `require('meian').apply(<mode>)` inside each instance.
 
@@ -78,7 +79,7 @@ User commands:
 
 ```
                                     ┌───────────────────────┐
-  AppleInterfaceThemeChanged ─────▶ │   meian-watcher       │
+  .GlobalPreferences.plist ───────▶ │   meian-watcher       │
                                     │   (singleton, flock)  │
                                     └──────────┬────────────┘
                                                │

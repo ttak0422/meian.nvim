@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import Dispatch
 
 let usage = """
 meian-watcher: macOS Light/Dark mode watcher for Neovim.
@@ -66,6 +67,7 @@ func parseArguments() -> Options {
 let options = parseArguments()
 let lockPath = "\(options.baseDir)/watch.lock"
 let subscribersDir = "\(options.baseDir)/subscribers"
+let globalPreferencesPath = "\(NSHomeDirectory())/Library/Preferences/.GlobalPreferences.plist"
 let fm = FileManager.default
 
 do {
@@ -179,6 +181,67 @@ struct Subscriber {
     }
 }
 
+var lastAppearance = currentAppearance()
+
+@Sendable func notifyIfChanged() {
+    let appearance = currentAppearance()
+    if appearance == lastAppearance {
+        return
+    }
+    lastAppearance = appearance
+    notifyAll(appearance: appearance)
+}
+
+@Sendable func scheduleAppearanceCheck() {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        notifyIfChanged()
+    }
+}
+
+final class PreferenceFileWatcher {
+    private let filePath: String
+    private let onChange: () -> Void
+    private var fileSource: DispatchSourceFileSystemObject?
+
+    init(filePath: String, onChange: @escaping () -> Void) {
+        self.filePath = filePath
+        self.onChange = onChange
+    }
+
+    func start() {
+        watchFile()
+    }
+
+    private func watchFile() {
+        fileSource?.cancel()
+        fileSource = nil
+
+        let fd = open(filePath, O_EVTONLY)
+        guard fd >= 0 else {
+            return
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend, .attrib, .delete, .rename],
+            queue: .main
+        )
+        source.setEventHandler { [weak self, weak source] in
+            guard let self = self else { return }
+            let data = source?.data ?? []
+            self.onChange()
+            if data.contains(.delete) || data.contains(.rename) {
+                self.watchFile()
+            }
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        fileSource = source
+        source.resume()
+    }
+}
+
 var lastSeenSubscriber = Date()
 
 @Sendable func checkIdle() {
@@ -192,14 +255,10 @@ var lastSeenSubscriber = Date()
     }
 }
 
-let center = DistributedNotificationCenter.default()
-center.addObserver(
-    forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-    object: nil,
-    queue: .main
-) { _ in
-    notifyAll(appearance: currentAppearance())
+let preferenceWatcher = PreferenceFileWatcher(filePath: globalPreferencesPath) {
+    scheduleAppearanceCheck()
 }
+preferenceWatcher.start()
 
 Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
     checkIdle()
