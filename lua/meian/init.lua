@@ -8,7 +8,23 @@ local default_config = {
 }
 
 local config = vim.deepcopy(default_config)
-local base_dir = (vim.env.XDG_RUNTIME_DIR or "/tmp") .. "/meian-mac-appearance"
+local function runtime_root()
+  local runtime = vim.env.XDG_RUNTIME_DIR
+  if runtime and runtime ~= "" then
+    return runtime
+  end
+  -- macOS login sessions and Nix builds have separate, owned temp directories.
+  local tmp = vim.env.TMPDIR
+  local stat = tmp and tmp:sub(1, 1) == "/" and vim.uv.fs_stat(tmp)
+  local user = vim.uv.os_get_passwd()
+  if stat and user and stat.type == "directory" and stat.uid == user.uid
+      and bit.band(stat.mode, 0x12) == 0 then -- no group/other write bits
+    return tmp
+  end
+  return vim.fn.stdpath("cache")
+end
+
+local base_dir = runtime_root():gsub("/+$", "") .. "/meian-mac-appearance"
 local subscriber_file = nil
 
 -- Populated by build-time substitution (e.g. the Nix flake).
@@ -40,7 +56,7 @@ local function register_subscriber()
     return nil, "could not start nvim server"
   end
 
-  vim.fn.mkdir(base_dir .. "/subscribers", "p")
+  vim.fn.mkdir(base_dir .. "/subscribers", "p", 448)
 
   local path = subscriber_path()
   local body = vim.json.encode({
