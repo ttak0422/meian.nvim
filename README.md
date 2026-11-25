@@ -98,8 +98,9 @@ User commands:
 - The watcher exits after 60s without any subscribers, so it does not
   linger when no Neovim is running.
 
-The base directory is `$XDG_RUNTIME_DIR/meian-mac-appearance` when set,
-otherwise `/tmp/meian-mac-appearance`:
+Meian uses `meian-mac-appearance` under `$XDG_RUNTIME_DIR` when set, otherwise
+under the current user's `$TMPDIR` if it is not writable by other users, or
+under Neovim's cache directory.
 
 ```
 <base-dir>/
